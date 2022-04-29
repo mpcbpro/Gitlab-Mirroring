@@ -17,6 +17,7 @@ public class OauthService {
     public void request(SocialLoginType socialLoginType) {
         SocialOauth socialOauth = this.findSocialOauthByType(socialLoginType);
         String redirectURL = socialOauth.getOauthRedirectURL();
+        System.out.println(">>~~ :  " + redirectURL);
         try {
             response.sendRedirect(redirectURL);
         } catch (IOException e) {
@@ -26,7 +27,7 @@ public class OauthService {
 
     public ResponseEntity<String> requestAccessToken(SocialLoginType socialLoginType, String code) {
         SocialOauth socialOauth = this.findSocialOauthByType(socialLoginType);
-        return (ResponseEntity<String>) socialOauth.requestAccessToken(code);
+        return socialOauth.getUserInfoByToken(code);
     }
 
     private SocialOauth findSocialOauthByType(SocialLoginType socialLoginType) {

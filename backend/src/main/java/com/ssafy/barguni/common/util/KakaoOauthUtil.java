@@ -1,6 +1,8 @@
 package com.ssafy.barguni.common.util;
 
 import com.ssafy.barguni.api.user.vo.OauthToken;
+import lombok.RequiredArgsConstructor;
+import net.minidev.json.JSONUtil;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -11,16 +13,43 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 
-@Component
-public class KakaoOauthUtil {
+import java.util.HashMap;
+import java.util.Map;
+import java.util.stream.Collectors;
 
-    public static String clientId;
+@Component
+@RequiredArgsConstructor
+public class KakaoOauthUtil implements SocialOauth {
+
     @Value("${sns.kakao.client.id}")
-    public void setClientId(String id){
-        clientId = id;
+    private String KAKAO_SNS_CLIENT_ID;
+    @Value("${sns.kakao.callback.url}")
+    private String KAKAO_SNS_CALLBACK_URL;
+    @Value("${sns.kakao.url}")
+    private String KAKAO_SNS_BASE_URL;
+    @Value("${sns.kakao.profile_url}")
+    private String KAKAO_SNS_PROFILE_URL;
+    @Value("${sns.kakao.token_url}")
+    private String KAKAO_SNS_TOKEN_URL;
+
+
+    @Override
+    public String getOauthRedirectURL() {
+        Map<String, Object> params = new HashMap<>();
+//        params.put("scope", "profile");
+        params.put("response_type", "code");
+        params.put("client_id", KAKAO_SNS_CLIENT_ID);
+        params.put("redirect_uri", KAKAO_SNS_CALLBACK_URL);
+
+        String parameterString = params.entrySet().stream()
+                .map(x -> x.getKey() + "=" + x.getValue())
+                .collect(Collectors.joining("&"));
+
+        return KAKAO_SNS_BASE_URL + "?" + parameterString;
     }
 
-    public static ResponseEntity<String> getKakaoToken(String code) {
+    @Override
+    public ResponseEntity<String> getUserInfoByToken(String code) {
         ResponseEntity<String> tokens = null;
         // 카카오 토큰 요청
         RestTemplate rt = new RestTemplate();
@@ -29,17 +58,15 @@ public class KakaoOauthUtil {
 
         MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
         params.add("grant_type", "authorization_code");
-        params.add("client_id", clientId);
-        params.add("redirect_uri","https://k6b202.p.ssafy.io/petodoctor/kakaooauth");
-//        params.add("redirect_uri","http://localhost:3000/petodoctor/kakaooauth");
-//        params.add("redirect_uri","http://localhost:3000/kakaooauth");
+        params.add("client_id", KAKAO_SNS_CLIENT_ID);
+        params.add("redirect_uri",KAKAO_SNS_CALLBACK_URL);
         params.add("code", code);
 
         HttpEntity<MultiValueMap<String, String>> kakaoTokenRequest =
                 new HttpEntity<>(params, headers);
         try {
             tokens = rt.exchange(
-                    "https://kauth.kakao.com/oauth/token",
+                    KAKAO_SNS_TOKEN_URL,
                     HttpMethod.POST,
                     kakaoTokenRequest,
                     String.class
@@ -52,7 +79,7 @@ public class KakaoOauthUtil {
         return tokens;
     }
 
-    public static ResponseEntity<String> getKakaoProfile(OauthToken oauthToken) {
+    public static ResponseEntity<String> getProfile(OauthToken oauthToken) {
         ResponseEntity<String> response = null;
         // 카카오 토큰 요청
         RestTemplate rt = new RestTemplate();

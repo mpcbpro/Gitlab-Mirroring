@@ -27,7 +27,6 @@ public class GoogleOauthUtil implements SocialOauth {
     @Value("${sns.google.token.url}")
     private String GOOGLE_SNS_TOKEN_BASE_URL;
 
-    @Override
     public String getOauthRedirectURL() {
         Map<String, Object> params = new HashMap<>();
         params.put("scope", "profile email");
@@ -44,7 +43,7 @@ public class GoogleOauthUtil implements SocialOauth {
     }
 
     @Override
-    public ResponseEntity<String> requestAccessToken(String code) {
+    public ResponseEntity<String> getUserInfoByToken(String code) {
         RestTemplate restTemplate = new RestTemplate();
 
         Map<String, Object> params = new HashMap<>();
@@ -60,7 +59,7 @@ public class GoogleOauthUtil implements SocialOauth {
         return responseEntity;
     }
 
-    public static ResponseEntity<String> getGoogleProfile(GoogleToken googleToken) {
+    public static ResponseEntity<String> getProfile(GoogleToken googleToken) {
         ResponseEntity<String> response = null;
         // 카카오 토큰 요청
         RestTemplate rt = new RestTemplate();

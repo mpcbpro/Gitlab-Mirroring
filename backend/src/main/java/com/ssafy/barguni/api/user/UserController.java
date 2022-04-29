@@ -72,10 +72,10 @@ public class UserController {
 
     /**
      * 사용자로부터 SNS 로그인 요청을 Social Login Type 을 받아 처리
-     * @param socialLoginType (GOOGLE, FACEBOOK, NAVER, KAKAO)
+     * @param socialLoginType (GOOGLE, KAKAO)
      */
     @GetMapping("/oauth-login/{socialLoginType}")
-    @Operation(summary = "구글 로그인", description = "구글 로그인을 요쳥한다.")
+    @Operation(summary = "SNS 로그인 요청", description = "SNS 로그인을 요쳥한다.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "성공"),
             @ApiResponse(responseCode = "401", description = "인증 실패"),
@@ -90,12 +90,12 @@ public class UserController {
 
     /**
      * Social Login API Server 요청에 의한 callback 을 처리
-     * @param socialLoginType (GOOGLE, KAKAO(합칠까....)
+     * @param socialLoginType (GOOGLE, KAKAO)
      * @param code API Server 로부터 넘어노는 code
      * @return SNS Login 요청 결과로 받은 Json 형태의 String 문자열 (access_token, refresh_token 등)
      */
     @GetMapping("/oauth-login/{socialLoginType}/callback")
-    @Operation(summary = "구글 로그인", description = "구글 인증 코드로 구글 토큰을 얻고 정보로 로그인한다.")
+    @Operation(summary = "SNS 로그인", description = "SNS 인증 코드로 SNS 토큰을 얻고 정보로 로그인한다.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "성공"),
             @ApiResponse(responseCode = "401", description = "인증 실패"),
@@ -105,8 +105,6 @@ public class UserController {
     public ResponseEntity<ResVO<TokenRes>> googleLogin(
             @PathVariable(name = "socialLoginType") SocialLoginType socialLoginType,
             @RequestParam(name = "code") String code) {
-        log.info(">> 소셜 로그인 API 서버로부터 받은 code :: {}", code);
-//        return oauthService.requestAccessToken(socialLoginType, code);
 
         ResVO<TokenRes> result = new ResVO<>();
         HttpStatus status = null;
@@ -135,7 +133,7 @@ public class UserController {
 
         //------------ 통신 ---------------//
         // 토큰으로 프로필 정보 가져오기
-        ResponseEntity<String> responseProfile = GoogleOauthUtil.getGoogleProfile(googleToken);
+        ResponseEntity<String> responseProfile = GoogleOauthUtil.getProfile(googleToken);
         if(responseProfile == null){
             result.setMessage("유효하지 않은 토큰 입니다.");
             status = HttpStatus.BAD_REQUEST;
@@ -177,7 +175,7 @@ public class UserController {
     }
 
 
-    @PostMapping("/oauth-login/kakao")
+    @GetMapping("/oauth-login/{socialLoginType}/callback")
     @Operation(summary = "카카오 로그인", description = "카카오 인증 코드로 카카오 토큰을 얻고 정보로 로그인한다.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "성공"),
@@ -185,13 +183,16 @@ public class UserController {
             @ApiResponse(responseCode = "404", description = "사용자 없음"),
             @ApiResponse(responseCode = "500", description = "서버 오류")
     })
-    public ResponseEntity<ResVO<TokenRes>> kakaoLogin (@RequestParam String code) {
+    public ResponseEntity<ResVO<TokenRes>> kakaoLogin (
+            @PathVariable(name = "socialLoginType") SocialLoginType socialLoginType,
+            @RequestParam(name = "code") String code) {
         ResVO<TokenRes> result = new ResVO<>();
         HttpStatus status = null;
 
         //------------ 통신 ---------------//
         // 토큰 관련 정보 얻기
-        ResponseEntity<String> responseToken = KakaoOauthUtil.getKakaoToken(code);
+        ResponseEntity<String> responseToken = oauthService.requestAccessToken(socialLoginType, code);
+
         if(responseToken == null){
             result.setMessage("유효하지 않은 카카오 인증 코드 입니다.");
             status = HttpStatus.BAD_REQUEST;
@@ -203,6 +204,7 @@ public class UserController {
         OauthToken oauthToken = null;
         try {
             oauthToken = objectMapper.readValue(responseToken.getBody(), OauthToken.class);
+
         } catch (JsonProcessingException e) { // 파싱 에러
             e.printStackTrace();
             status = HttpStatus.INTERNAL_SERVER_ERROR;
@@ -210,10 +212,10 @@ public class UserController {
             return new ResponseEntity<ResVO<TokenRes>>(result, status);
         }
 
-
         //------------ 통신 ---------------//
         // 토큰으로 프로필 정보 가져오기
-        ResponseEntity<String> responseProfile = KakaoOauthUtil.getKakaoProfile(oauthToken);
+        ResponseEntity<String> responseProfile = KakaoOauthUtil.getProfile(oauthToken);
+
         if(responseProfile == null){
             result.setMessage("유효하지 않은 토큰 입니다.");
             status = HttpStatus.BAD_REQUEST;
@@ -224,6 +226,7 @@ public class UserController {
         KakaoProfile kakaoProfile = null;
         try {
             kakaoProfile = objectMapper.readValue(responseProfile.getBody(), KakaoProfile.class);
+
         } catch (JsonProcessingException e) { // 파싱 에러
             e.printStackTrace();
             status = HttpStatus.INTERNAL_SERVER_ERROR;
@@ -231,20 +234,18 @@ public class UserController {
             return new ResponseEntity<ResVO<TokenRes>>(result, status);
         }
 
-
-
         // 이메일 중복 확인 및 토큰 반환
         String email = kakaoProfile.getKakao_account().getEmail();
         String nickname = kakaoProfile.getProperties().getNickname();
         Boolean duplicated = userService.isDuplicated(email);
         User user = null;
         if(!duplicated) {
+            // 회원가입
             user = userService.oauthSignup(email, nickname);
-//            System.out.println("소셜 회원가입");
         }
         else{
+            // 로그인
             user = userService.findByEmail(email);
-//            System.out.println("소셜 로그인");
         }
 
         status = HttpStatus.OK;
@@ -385,9 +386,8 @@ public class UserController {
             AccountUserDetails userDetails = (AccountUserDetails) SecurityContextHolder.getContext().getAuthentication().getDetails();
             User user = userService.findById(userDetails.getUserId());
             Basket basket = basketService.findByJoinCode(joinCode);
-            System.out.println("~~~~~");
+
             boolean check = userBasketService.existsBybktId(user.getId(), basket.getId());
-            System.out.println("~~~~~" + check);
 
             if ( !userBasketService.existsBybktId(user.getId(), basket.getId()) && userBasketService.addBasket(user, basket.getId()).isPresent()) {
                 resultMap.put("message", "성공");
